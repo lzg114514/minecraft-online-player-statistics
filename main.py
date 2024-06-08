@@ -89,12 +89,14 @@ def set_target_server_api() -> tuple[Response, int]:
 
 @app.route("/api/v1/control/toggle-task", methods=["POST"])
 def toggle_task_api() -> tuple[Response, int]:
-    global task_paused, task_terminated
+    global task_paused, task_terminated, task_interval
     data: dict = request.get_json()
     task_paused = data.get("task-paused", task_paused)
     task_terminated = data.get("task-terminated", task_terminated)
+    task_interval = data.get("task-interval", task_interval)
     return jsonify({"success": True, "code": 200, "msg": "200 OK",
-                    "data": {"current": {"task-paused": task_paused, "task-terminated": task_terminated}}}), 200
+                    "data": {"current": {"task-paused": task_paused, "task-terminated": task_terminated,
+                                         "task-interval": task_interval}}}), 200
 
 
 @app.errorhandler(Exception)
