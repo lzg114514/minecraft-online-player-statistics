@@ -1,7 +1,9 @@
 import logging
 import time
 import mcstat
+import threading
 import traceback
+import waitress
 from typing import Any
 from rich.logging import RichHandler
 from werkzeug.exceptions import HTTPException
@@ -26,14 +28,13 @@ task_interval: int = 10  # In seconds
 # Initialize logger
 FORMAT: str = "%(message)s"
 logging.basicConfig(
-    level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
+    level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)]
 )
 
 log: logging.Logger = logging.getLogger("rich")
 
 # Initialize flask server app
 app: Flask = Flask(__name__)
-app.logger.handlers = [RichHandler()]
 
 
 def task() -> None:
@@ -44,10 +45,10 @@ def task() -> None:
             try:
                 latest_status = mcstat.get_info(host=target_server_host, port=target_server_port)
                 last_update_timestamp = time.time()
-                player_count: int = latest_status.get("players", {"online": -1})["players"]
+                player_count: int = latest_status.get("players", {"online": -1}).get("online", -1)
                 formatted_time: str = time.strftime("%Y-%m-%d %H:%M:%S")
-                log.info(
-                    f"Updated Minecraft status, {player_count} players online")
+                log.info(f"[blue]Updated Minecraft status, {player_count} players online",
+                         extra={"markup": True})
 
             except Exception as e:
                 logging.exception("Error occurred while updating minecraft status.")
@@ -58,6 +59,11 @@ def task() -> None:
                 file.write(f"{formatted_time},{player_count}\n")
             cnt += 1
             time.sleep(task_interval)
+
+
+@app.route("/api/v1/ping", methods=["GET", "POST"])
+def ping_api() -> tuple[Response, int]:
+    return jsonify({"success": True, "code": 200, "msg": "200 OK", "data": None}), 200
 
 
 @app.route("/api/v1/data/latest-status", methods=["GET", "POST"])
@@ -98,11 +104,19 @@ def handle_exception(e: Exception) -> tuple[Response, int]:
         message: str = e.get_description()
         return jsonify({"success": False, "code": code, "msg": message, "data": None}), e.code
     else:
+        log.exception("An unexpected error occurred.")
         message: str = "An unexpected error occurred."
         return jsonify(
             {"success": False, "code": 500, "msg": message, "data": {"exception": traceback.format_exc()}}), 500
 
 
+@app.after_request
+def log_each_request(response: Response) -> Response:
+    log.info(f"{request.remote_addr} -- {request.method} {request.path} {response.status_code}")
+    return response
+
+
 if __name__ == '__main__':
     log.info(f"Starting Server: {PROJECT_NAME} Version {VERSION}")
-    app.run(host=HOST, port=PORT)
+    threading.Thread(target=task).start()
+    waitress.serve(app, host=HOST, port=PORT)
