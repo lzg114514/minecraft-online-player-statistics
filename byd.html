@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>HighCharts Example</title>
+        <script src="https://code.highcharts.com/highcharts.js"></script>
+        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    </head>
+    <body>
+        <div style="position: absolute; top: 10px; right: 10px">
+            <select id="daysSelect">
+                <option value="1">1 Day</option>
+                <option value="7">7 Days</option>
+                <option value="30">30 Days</option>
+                <option value="365">365 Days</option>
+            </select>
+        </div>
+        <div id="container" style="width: 100%; height: 100vh"></div>
+
+        <script>
+            const apiUrl = "http://127.0.0.1:1410/api/v1/data/status";
+            let chart;
+            let currentDays = 1;
+
+            function fetchData(days) {
+                return $.ajax({
+                    url: apiUrl,
+                    method: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify({ days: days }),
+                });
+            }
+
+            function updateChart(data) {
+                const seriesData = data.data.status.map((item) => {
+                    const time = Object.keys(item)[0];
+                    const value = Object.values(item)[0];
+                    return [time, value];
+                });
+                chart.series[0].setData(seriesData);
+            }
+
+            function initializeChart() {
+                chart = Highcharts.chart("container", {
+                    chart: {
+                        type: "line",
+                    },
+                    title: {
+                        text: "Player Status Over Time",
+                    },
+                    xAxis: {
+                        type: "datetime",
+                        title: {
+                            text: "Time",
+                        },
+                    },
+                    yAxis: {
+                        title: {
+                            text: "Player Count",
+                        },
+                    },
+                    series: [
+                        {
+                            name: "Players",
+                            data: [],
+                        },
+                    ],
+                });
+            }
+
+            function refreshData() {
+                fetchData(currentDays)
+                    .done((data) => {
+                        if (data.success) {
+                            updateChart(data);
+                        } else {
+                            console.error("Failed to fetch data:", data.msg);
+                        }
+                    })
+                    .fail((err) => {
+                        console.error("Error:", err);
+                    });
+            }
+
+            $(document).ready(() => {
+                initializeChart();
+                refreshData();
+                setInterval(refreshData, 30000); // Refresh every 30 seconds
+
+                $("#daysSelect").change(function () {
+                    currentDays = $(this).val();
+                    refreshData();
+                });
+            });
+        </script>
+    </body>
+</html>
